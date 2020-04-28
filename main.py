@@ -2,17 +2,15 @@ import tweepy
 from sqlalchemy.exc import ProgrammingError
 import mysql.connector
 from mysql.connector import Error
+import time
 
+keyword = input("please give keyword: ")
+tab_name = input("please provide database name: ")
 
-
-# make a txt file containing db information
+# open a txt file containing db information
 db = open("db.txt", "r").readlines()
-# make a keys.txt file to read in twitter API credentials
+# open a keys.txt file to read in twitter API credentials
 keys = open("keys2.txt", "r").readlines()
-#define table name here
-tab_name = 'test'
-# provide keyword or keywords you want to track
-keyword = 'lockdown'
 
 # creating and/or connecting to our database
 try:
@@ -47,15 +45,31 @@ try:
         cursor = connection.cursor()
         cursor.execute("select database();")
         record = cursor.fetchone()
-        print("You're connected to database: ", record)
+        print("You're connected to database: ", record[0])
 
 except Error as e:
     print("Error while connecting to MySQL", e)
 
 
 class MyStreamListener(tweepy.StreamListener):
-    table_name = ''
-
+    #table_name = ''
+    def __init__(self, table_name, keys, time_limit=60):
+        self.start_time = time.time()
+        self.limit = time_limit
+        super(MyStreamListener, self).__init__()
+        # define table name
+        self.table_name = table_name
+        # do oauth
+        auth = tweepy.OAuthHandler(keys[0].strip(), keys[1].strip())
+        auth.set_access_token(keys[2].strip(), keys[3].strip())
+        self.api = tweepy.API(auth)
+    """
+    def on_data(self, data):
+        if (time.time() - self.start_time) < self.limit:
+            return True
+        else:
+            return False
+    """
     def on_status(self, status):
         # collect status information during listening
         # we only capture the information we need for each tweet
@@ -90,19 +104,7 @@ class MyStreamListener(tweepy.StreamListener):
             if status_code == 420:
                 return False
 
-    def create_api_access(self, keys):
-        auth = tweepy.OAuthHandler(keys[0].strip(), keys[1].strip())
-        auth.set_access_token(keys[2].strip(), keys[3].strip())
-        self.api = tweepy.API(auth)
-
-while True:
-    try:
-        stream_listener = MyStreamListener()
-        stream_listener.create_api_access(keys)
-        stream_listener.table_name = tab_name
-        stream = tweepy.Stream(auth=stream_listener.api.auth, listener=stream_listener)
-        stream.filter(track=[keyword])
-    except:
-        continue
-
-
+        if (time.time() - self.start_time) < self.limit:
+            return True
+        else:
+            return False
